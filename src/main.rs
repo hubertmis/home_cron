@@ -92,9 +92,9 @@ async fn open_shades_on_dawn(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStd
 
         match result {
             Ok(_) => {
-                for rsrc in ["lr", "d1", "d2", "d3"] {
-                    // TODO: Add a counter breaking this loop
+                for rsrc in ["lr", "dr1", "dr2", "dr3"] {
                     // TODO: Spawn threads to open shades in parallel?
+                    let mut loop_cnt: u32 = 4;
                     loop {
                         let result = move_shades(local_endpoint, rsrc, "up").await;
                         match result {
@@ -103,6 +103,11 @@ async fn open_shades_on_dawn(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStd
                                 println!("Error opening shades: {}", e.to_string());
                                 tokio::time::sleep(Duration::from_secs(15)).await;
                             }
+                        }
+
+                        loop_cnt -= 1;
+                        if loop_cnt == 0 {
+                            break;
                         }
                     }
                 }
@@ -122,9 +127,9 @@ async fn close_shades_on_dusk(local_endpoint: &Arc<DatagramLocalEndpoint<AllowSt
 
         match result {
             Ok(_) => {
-                for rsrc in ["lr", "d1", "d2", "d3"] {
-                    // TODO: Add a counter breaking this loop
+                for rsrc in ["lr", "dr1", "dr2", "dr3"] {
                     // TODO: Spawn threads to open shades in parallel?
+                    let mut loop_cnt: u32 = 4;
                     loop {
                         let result = move_shades(local_endpoint, rsrc, "down").await;
                         match result {
@@ -133,6 +138,11 @@ async fn close_shades_on_dusk(local_endpoint: &Arc<DatagramLocalEndpoint<AllowSt
                                 println!("Error closing shades: {}", e.to_string());
                                 tokio::time::sleep(Duration::from_secs(15)).await;
                             }
+                        }
+
+                        loop_cnt -= 1;
+                        if loop_cnt == 0 {
+                            break;
                         }
                     }
                 }
