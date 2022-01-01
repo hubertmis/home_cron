@@ -178,7 +178,14 @@ async fn open_shades_on_dawn(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStd
 async fn close_shades_on_dusk(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) {
     println!("Started shades closer");
     loop {
-        let result = wait_until_twilight(1).await;
+        let wait = true;
+        let result;
+
+        if wait {
+            result = wait_until_twilight(1).await;
+        } else {
+            result = Ok(());
+        }
 
         match result {
             Ok(_) => {
@@ -281,8 +288,7 @@ async fn service_discovery(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUd
 }
 
 async fn send_request_with_writer<F>(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, addr: &SocketAddr, resource: &str, writer: F) -> Result<(), String> 
-where
-    F: Fn(&mut dyn async_coap::message::MessageWrite) -> Result<(), async_coap::Error> + Send,
+    where F: Fn(&mut dyn async_coap::message::MessageWrite) -> Result<(), async_coap::Error> + Send,
 {
     let uri = String::new() + "coap://" + &addr.to_string();
     let remote_endpoint = local_endpoint.remote_endpoint_from_uri(Uri::from_str(&uri).unwrap()).unwrap();
@@ -303,26 +309,13 @@ where
 }
 
 async fn send_request(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, addr: &SocketAddr, resource: &str, key: &str, value: &str) -> Result<(), String> {
-    let uri = String::new() + "coap://" + &addr.to_string();
-    let remote_endpoint = local_endpoint.remote_endpoint_from_uri(Uri::from_str(&uri).unwrap()).unwrap();
+    send_request_with_writer(local_endpoint, addr, resource, |msg_wrt| {
+             let mut payload = BTreeMap::new();
+             payload.insert(key, value);
 
-    let future_result = remote_endpoint.send_to(
-        RelRef::from_str(resource).unwrap(),
-        CoapRequest::post()
-            .content_format(ContentFormat::APPLICATION_CBOR)
-            .payload_writer(|msg_wrt| {
-                let mut payload = BTreeMap::new();
-                payload.insert(key, value);
-
-                msg_wrt.set_msg_code(MsgCode::MethodPost);
-                ciborium::ser::into_writer(&payload, msg_wrt).unwrap();
-                Ok(())
-            })
-            .emit_successful_response()
-        );
-
-    let result = future_result.await;
-    result.map(|_| ()).map_err(|e| e.to_string())
+             ciborium::ser::into_writer(&payload, msg_wrt).unwrap();
+             Ok(())
+         }).await
 }
 
 #[tokio::main]
