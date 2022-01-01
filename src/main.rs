@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use chrono::prelude::*;
+use rust_decimal::prelude::*;
 use serde::Deserialize;
 
 use socket2::{Socket, Domain, Type};
@@ -78,11 +79,77 @@ async fn wait_until_twilight(twilight_index: usize) -> Result<(), String> {
     Ok(())
 }
 
+async fn wait_until_time(time: NaiveTime) -> Result<(), String> {
+    let now = Local::now();
+    let today = now.date();
+    let tomorrow = today.succ();
+    let today_time = today.and_time(time).unwrap();
+    let tomorrow_time = tomorrow.and_time(time).unwrap();
+
+    let target_time = if now > today_time { tomorrow_time } else { today_time };
+    let sleep_time = (target_time - now).to_std().unwrap();
+    tokio::time::sleep(sleep_time).await;
+    Ok(())
+}
+
 async fn move_shades(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, rsrc: &str, target: &str) -> Result<(), String> {
     println!("{} {}", rsrc, target);
 
     let addr = service_discovery(local_endpoint, rsrc, None).await?;
     send_request(local_endpoint, &addr, rsrc, "val", target).await
+}
+
+fn convert_decimal_to_cborium(value: &Decimal) -> Result<ciborium::value::Value, std::num::TryFromIntError> {
+    use ciborium::value::{Value, Integer};
+
+    Ok(Value::Tag(4, Box::new(Value::Array(
+            [Value::Integer(Integer::from(-i32::try_from(value.scale())?)),
+             Value::Integer(Integer::from(i64::try_from(value.mantissa())?))
+            ].to_vec()
+    ))))
+}
+
+async fn set_temperature(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, rsrc: &str, target: &Decimal) -> Result<(), String> {
+    let addr = service_discovery(local_endpoint, rsrc, None).await?;
+    send_request_with_writer(local_endpoint, &addr, rsrc, |msg_wrt| {
+        let mut payload = BTreeMap::new();
+        payload.insert("s", convert_decimal_to_cborium(target).map_err(|_e| async_coap::Error::InvalidArgument)?);
+
+        ciborium::ser::into_writer(&payload, msg_wrt).unwrap();
+        Ok(())
+    }).await
+}
+
+async fn action_for_resources<'a, F, C, Fut>(local_endpoint: &'a Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>,
+                                             resources: &[(&'a str, &'a C)],
+                                             action: F,
+                                             num_tries: Option<u32>)
+    where F: Fn(&'a Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, &'a str, &'a C) -> Fut,
+          C: ?Sized,
+          Fut: futures::Future<Output = Result<(), String>>,
+          Fut: 'a,
+{
+    // TODO: spawn threads for each of the resources to manage them in parallel?
+    for rsrc in resources {
+        let mut loop_cnt = num_tries.unwrap_or(4);
+        if loop_cnt == 0 { loop_cnt = 1 } // TODO: Infinite number of retries for 0?
+
+        loop {
+            let result = action(local_endpoint, rsrc.0, rsrc.1).await;
+            match result {
+                Ok(_) => break,
+                Err(e) => {
+                    println!("Error handling action for resource {}: {}", rsrc.0, e); // TODO: Better error handlig
+                    loop_cnt -= 1;
+                    if loop_cnt == 0 {
+                        break;
+                    }
+
+                    tokio::time::sleep(Duration::from_secs(15)).await;
+                }
+            }
+        }
+    }
 }
 
 async fn open_shades_on_dawn(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) {
@@ -92,25 +159,13 @@ async fn open_shades_on_dawn(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStd
 
         match result {
             Ok(_) => {
-                for rsrc in ["lr", "dr1", "dr2", "dr3"] {
-                    // TODO: Spawn threads to open shades in parallel?
-                    let mut loop_cnt: u32 = 4;
-                    loop {
-                        let result = move_shades(local_endpoint, rsrc, "up").await;
-                        match result {
-                            Ok(_) => break,
-                            Err(e) => {
-                                println!("Error opening shades: {}", e.to_string());
-                                tokio::time::sleep(Duration::from_secs(15)).await;
-                            }
-                        }
-
-                        loop_cnt -= 1;
-                        if loop_cnt == 0 {
-                            break;
-                        }
-                    }
-                }
+                action_for_resources(local_endpoint,
+                                     &[("lr", "up"),
+                                       ("dr1", "up"),
+                                       ("dr2", "up"),
+                                       ("dr3", "up")],
+                                     move_shades,
+                                     Some(4)).await;
             }
             Err(e) => {
                 println!("Error waiting for dawn: {}", e.to_string());
@@ -127,29 +182,61 @@ async fn close_shades_on_dusk(local_endpoint: &Arc<DatagramLocalEndpoint<AllowSt
 
         match result {
             Ok(_) => {
-                for rsrc in ["lr", "dr1", "dr2", "dr3"] {
-                    // TODO: Spawn threads to open shades in parallel?
-                    let mut loop_cnt: u32 = 4;
-                    loop {
-                        let result = move_shades(local_endpoint, rsrc, "down").await;
-                        match result {
-                            Ok(_) => break,
-                            Err(e) => {
-                                println!("Error closing shades: {}", e.to_string());
-                                tokio::time::sleep(Duration::from_secs(15)).await;
-                            }
-                        }
-
-                        loop_cnt -= 1;
-                        if loop_cnt == 0 {
-                            break;
-                        }
-                    }
-                }
+                action_for_resources(local_endpoint,
+                                     &[("lr", "down"),
+                                       ("dr1", "down"),
+                                       ("dr2", "down"),
+                                       ("dr3", "down")],
+                                     move_shades,
+                                     Some(4)).await;
             }
             Err(e) => {
                 println!("Error waiting for dusk: {}", e.to_string());
                 tokio::time::sleep(Duration::from_secs(15)).await;
+            }
+        }
+    }
+}
+
+async fn enable_floor_heating_in_the_morning(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) {
+    loop {
+        let result = wait_until_time(NaiveTime::from_hms(7, 0, 0)).await;
+
+        match result {
+            Ok(_) => {
+                action_for_resources(local_endpoint, 
+                                     &[("gbrfh", &Decimal::new(235, 1)),
+                                       ("mbrfh", &Decimal::new(235, 1)),
+                                       ("kfh", &Decimal::new(260, 1))],
+                                     set_temperature,
+                                     Some(4)
+                                    ).await;
+            }
+            Err (e) => {
+                println!("Error waiting for morning: {}", e.to_string());
+                tokio::time::sleep(Duration::from_secs(60)).await;
+            }
+        }
+    }
+}
+
+async fn disable_floor_heating_in_the_evening(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) {
+    loop {
+        let result = wait_until_time(NaiveTime::from_hms(23, 0, 0)).await;
+
+        match result {
+            Ok(_) => {
+                action_for_resources(local_endpoint, 
+                                     &[("gbrfh", &Decimal::new(200, 1)),
+                                       ("mbrfh", &Decimal::new(200, 1)),
+                                       ("kfh", &Decimal::new(200, 1))],
+                                     set_temperature,
+                                     Some(4)
+                                    ).await;
+            }
+            Err (e) => {
+                println!("Error waiting for evening: {}", e.to_string());
+                tokio::time::sleep(Duration::from_secs(60)).await;
             }
         }
     }
@@ -173,11 +260,11 @@ async fn service_discovery(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUd
 
                 msg_wrt.set_msg_code(MsgCode::MethodGet);
                 msg_wrt.set_msg_type(MsgType::Non);
-                serde_cbor::to_writer(msg_wrt, &payload).unwrap();
+                ciborium::ser::into_writer(&payload, msg_wrt).unwrap();
                 Ok(())
             })
             .use_handler(|context| {
-                let data : BTreeMap<String, BTreeMap<String, String>> = serde_cbor::from_slice(context.unwrap().message().payload()).unwrap(); // TODO: Handle errors
+                let data : BTreeMap<String, BTreeMap<String, String>> = ciborium::de::from_reader(context.unwrap().message().payload()).unwrap(); // TODO: Handle errors
 
                 for (service, _details) in data.iter() {
                     if service == srv_name {
@@ -193,6 +280,28 @@ async fn service_discovery(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUd
     result.map_err(|e| e.to_string())
 }
 
+async fn send_request_with_writer<F>(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, addr: &SocketAddr, resource: &str, writer: F) -> Result<(), String> 
+where
+    F: Fn(&mut dyn async_coap::message::MessageWrite) -> Result<(), async_coap::Error> + Send,
+{
+    let uri = String::new() + "coap://" + &addr.to_string();
+    let remote_endpoint = local_endpoint.remote_endpoint_from_uri(Uri::from_str(&uri).unwrap()).unwrap();
+
+    let future_result = remote_endpoint.send_to(
+        RelRef::from_str(resource).unwrap(),
+        CoapRequest::post()
+            .content_format(ContentFormat::APPLICATION_CBOR)
+            .payload_writer(move |msg_wrt| {
+                msg_wrt.set_msg_code(MsgCode::MethodPost);
+                writer(msg_wrt)
+            })
+            .emit_successful_response()
+        );
+
+    let result = future_result.await;
+    result.map(|_| ()).map_err(|e| e.to_string())
+}
+
 async fn send_request(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, addr: &SocketAddr, resource: &str, key: &str, value: &str) -> Result<(), String> {
     let uri = String::new() + "coap://" + &addr.to_string();
     let remote_endpoint = local_endpoint.remote_endpoint_from_uri(Uri::from_str(&uri).unwrap()).unwrap();
@@ -206,7 +315,7 @@ async fn send_request(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSock
                 payload.insert(key, value);
 
                 msg_wrt.set_msg_code(MsgCode::MethodPost);
-                serde_cbor::to_writer(msg_wrt, &payload);
+                ciborium::ser::into_writer(&payload, msg_wrt).unwrap();
                 Ok(())
             })
             .emit_successful_response()
@@ -238,6 +347,8 @@ async fn main() {
 
     let shades_open_local_endpoint = local_endpoint.clone();
     let shades_close_local_endpoint = local_endpoint.clone();
+    let fh_enabler_local_endpoint = local_endpoint.clone();
+    let fh_disabler_local_endpoint = local_endpoint.clone();
 
     tasks.push(tokio::spawn(async move {
         open_shades_on_dawn(&shades_open_local_endpoint).await;
@@ -245,8 +356,14 @@ async fn main() {
     tasks.push(tokio::spawn(async move {
         close_shades_on_dusk(&shades_close_local_endpoint).await;
     }));
+    tasks.push(tokio::spawn(async move {
+        enable_floor_heating_in_the_morning(&fh_enabler_local_endpoint).await;
+    }));
+    tasks.push(tokio::spawn(async move {
+        disable_floor_heating_in_the_evening(&fh_disabler_local_endpoint).await;
+    }));
 
     for task in tasks {
-        task.await;
+        task.await.expect("Failed infinite task");
     }
 }
