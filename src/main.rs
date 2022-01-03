@@ -229,7 +229,14 @@ async fn enable_floor_heating_in_the_morning(local_endpoint: &Arc<DatagramLocalE
 
 async fn disable_floor_heating_in_the_evening(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) {
     loop {
-        let result = wait_until_time(NaiveTime::from_hms(23, 0, 0)).await;
+        let wait = true;
+        let result;
+
+        if wait {
+            result = wait_until_time(NaiveTime::from_hms(23, 0, 0)).await;
+        } else {
+            result = Ok(());
+        }
 
         match result {
             Ok(_) => {
