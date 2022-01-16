@@ -369,6 +369,7 @@ dependencies = [
  "chrono",
  "ciborium",
  "futures",
+ "rand 0.8.4",
  "reqwest",
  "rust_decimal",
  "rust_decimal_macros",

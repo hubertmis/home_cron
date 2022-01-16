@@ -13,6 +13,8 @@ use async_coap::datagram::{DatagramLocalEndpoint, AllowStdUdpSocket};
 use async_coap::uri::Uri;
 use futures::prelude::*;
 
+use rand::Rng;
+
 async fn get_next_twilight() -> Result<[SystemTime; 2], String> {
     // TODO: Some kind of cache?
     #[derive(Deserialize)]
@@ -79,7 +81,7 @@ async fn wait_until_twilight(twilight_index: usize) -> Result<(), String> {
     Ok(())
 }
 
-async fn wait_until_time(time: NaiveTime) -> Result<(), String> {
+async fn wait_until_time(time: NaiveTime) {
     let now = Local::now();
     let today = now.date();
     let tomorrow = today.succ();
@@ -89,7 +91,41 @@ async fn wait_until_time(time: NaiveTime) -> Result<(), String> {
     let target_time = if now > today_time { tomorrow_time } else { today_time };
     let sleep_time = (target_time - now).to_std().unwrap();
     tokio::time::sleep(sleep_time).await;
-    Ok(())
+}
+
+async fn wait_exp_retry<F, Fut>(f: F) 
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = Result<(), String>>,
+{
+    let mut retry_cnt: u32 = 0;
+    let max_retry_cnt: u32 = 8;
+    let min_wait_secs: i32 = 15;
+    let rand_bound: i32 = (min_wait_secs/2).try_into().unwrap();
+
+    loop {
+        let result = f().await;
+
+        match result {
+            Ok(_) => break,
+            Err(e) => {
+                let rand_num;
+
+                {
+                    let mut rng = rand::thread_rng();
+                    rand_num = rng.gen_range(-rand_bound..rand_bound);
+                } 
+                let wait_time = u64::try_from(2i32.pow(retry_cnt) * min_wait_secs + rand_num).unwrap();
+
+                if retry_cnt < max_retry_cnt {
+                    retry_cnt += 1;
+                }
+
+                println!("Error in waiting function: {}. Retrying in {} s", e.to_string(), wait_time);
+                tokio::time::sleep(Duration::from_secs(wait_time)).await;
+            }
+        }
+    }
 }
 
 async fn move_shades(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, rsrc: &str, target: &str) -> Result<(), String> {
@@ -155,104 +191,59 @@ async fn action_for_resources<'a, F, C, Fut>(local_endpoint: &'a Arc<DatagramLoc
 async fn open_shades_on_dawn(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) {
     println!("Started shades opener");
     loop {
-        let result = wait_until_twilight(0).await;
+        wait_exp_retry(|| wait_until_twilight(0)).await;
 
-        match result {
-            Ok(_) => {
-                action_for_resources(local_endpoint,
-                                     &[("lr", "up"),
-                                       ("dr1", "up"),
-                                       ("dr2", "up"),
-                                       ("dr3", "up")],
-                                     move_shades,
-                                     Some(4)).await;
-            }
-            Err(e) => {
-                println!("Error waiting for dawn: {}", e.to_string());
-                tokio::time::sleep(Duration::from_secs(15)).await;
-            }
-        }
+        action_for_resources(local_endpoint,
+                             &[("lr", "up"),
+                               ("dr1", "up"),
+                               ("dr2", "up"),
+                               ("dr3", "up")],
+                             move_shades,
+                             Some(4)).await;
     }
 }
 
 async fn close_shades_on_dusk(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) {
     println!("Started shades closer");
     loop {
-        let wait = true;
-        let result;
+        wait_exp_retry(|| wait_until_twilight(1)).await;
 
-        if wait {
-            result = wait_until_twilight(1).await;
-        } else {
-            result = Ok(());
-        }
-
-        match result {
-            Ok(_) => {
-                action_for_resources(local_endpoint,
-                                     &[("lr", "down"),
-                                       ("dr1", "down"),
-                                       ("dr2", "down"),
-                                       ("dr3", "down")],
-                                     move_shades,
-                                     Some(4)).await;
-            }
-            Err(e) => {
-                println!("Error waiting for dusk: {}", e.to_string());
-                tokio::time::sleep(Duration::from_secs(15)).await;
-            }
-        }
+        action_for_resources(local_endpoint,
+                             &[("lr", "down"),
+                               ("dr1", "down"),
+                               ("dr2", "down"),
+                               ("dr3", "down"),
+                               ("k", "down")],
+                             move_shades,
+                             Some(4)).await;
     }
 }
 
 async fn enable_floor_heating_in_the_morning(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) {
     loop {
-        let result = wait_until_time(NaiveTime::from_hms(7, 0, 0)).await;
+        wait_until_time(NaiveTime::from_hms(7, 0, 0)).await;
 
-        match result {
-            Ok(_) => {
-                action_for_resources(local_endpoint, 
-                                     &[("gbrfh", &Decimal::new(235, 1)),
-                                       ("mbrfh", &Decimal::new(235, 1)),
-                                       ("kfh", &Decimal::new(260, 1))],
-                                     set_temperature,
-                                     Some(4)
-                                    ).await;
-            }
-            Err (e) => {
-                println!("Error waiting for morning: {}", e.to_string());
-                tokio::time::sleep(Duration::from_secs(60)).await;
-            }
-        }
+        action_for_resources(local_endpoint, 
+                             &[("gbrfh", &Decimal::new(235, 1)),
+                               ("mbrfh", &Decimal::new(235, 1)),
+                               ("kfh", &Decimal::new(260, 1))],
+                             set_temperature,
+                             Some(4)
+                            ).await;
     }
 }
 
 async fn disable_floor_heating_in_the_evening(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) {
     loop {
-        let wait = true;
-        let result;
+        wait_until_time(NaiveTime::from_hms(23, 0, 0)).await;
 
-        if wait {
-            result = wait_until_time(NaiveTime::from_hms(23, 0, 0)).await;
-        } else {
-            result = Ok(());
-        }
-
-        match result {
-            Ok(_) => {
-                action_for_resources(local_endpoint, 
-                                     &[("gbrfh", &Decimal::new(200, 1)),
-                                       ("mbrfh", &Decimal::new(200, 1)),
-                                       ("kfh", &Decimal::new(200, 1))],
-                                     set_temperature,
-                                     Some(4)
-                                    ).await;
-            }
-            Err (e) => {
-                println!("Error waiting for evening: {}", e.to_string());
-                tokio::time::sleep(Duration::from_secs(60)).await;
-            }
-        }
+        action_for_resources(local_endpoint, 
+                             &[("gbrfh", &Decimal::new(200, 1)),
+                               ("mbrfh", &Decimal::new(200, 1)),
+                               ("kfh", &Decimal::new(200, 1))],
+                             set_temperature,
+                             Some(4)
+                            ).await;
     }
 }
 
