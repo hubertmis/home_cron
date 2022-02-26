@@ -20,7 +20,7 @@ checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
 [[package]]
 name = "async-coap"
 version = "0.1.0"
-source = "git+https://github.com/google/rust-async-coap.git#71245d49449b2534b12dff75e84611967c009b29"
+source = "git+https://github.com/hubertmis/rust-async-coap.git?branch=pr/use-trace-instead-of-println#0f862b56b41962e4dda2760b96a349fc79e2ea01"
 dependencies = [
  "async-coap-uri",
  "futures",
@@ -35,7 +35,7 @@ dependencies = [
 [[package]]
 name = "async-coap-uri"
 version = "0.1.0"
-source = "git+https://github.com/google/rust-async-coap.git#71245d49449b2534b12dff75e84611967c009b29"
+source = "git+https://github.com/hubertmis/rust-async-coap.git?branch=pr/use-trace-instead-of-println#0f862b56b41962e4dda2760b96a349fc79e2ea01"
 dependencies = [
  "async-coap-uri-macros",
  "lazy_static",
@@ -46,7 +46,7 @@ dependencies = [
 [[package]]
 name = "async-coap-uri-macros"
 version = "0.1.0"
-source = "git+https://github.com/google/rust-async-coap.git#71245d49449b2534b12dff75e84611967c009b29"
+source = "git+https://github.com/hubertmis/rust-async-coap.git?branch=pr/use-trace-instead-of-println#0f862b56b41962e4dda2760b96a349fc79e2ea01"
 dependencies = [
  "lazy_static",
  "proc-macro-hack",
@@ -369,11 +369,13 @@ dependencies = [
  "chrono",
  "ciborium",
  "futures",
+ "log",
  "rand 0.8.4",
  "reqwest",
  "rust_decimal",
  "rust_decimal_macros",
  "serde",
+ "simple-logging",
  "socket2",
  "tokio",
 ]
@@ -749,7 +751,7 @@ dependencies = [
  "cfg-if",
  "instant",
  "libc",
- "redox_syscall",
+ "redox_syscall 0.2.10",
  "smallvec",
  "winapi",
 ]
@@ -983,6 +985,12 @@ dependencies = [
 
 [[package]]
 name = "redox_syscall"
+version = "0.1.57"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41cc0f7e4d5d4544e8861606a285bb08d3e70712ccc7d2b84d7c0ccfaf4b05ce"
+
+[[package]]
+name = "redox_syscall"
 version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8383f39639269cde97d255a32bdb68c047337295414940c68bdd30c2e13203ff"
@@ -1170,6 +1178,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "simple-logging"
+version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b00d48e85675326bb182a2286ea7c1a0b264333ae10f27a937a72be08628b542"
+dependencies = [
+ "lazy_static",
+ "log",
+ "thread-id",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1222,8 +1241,19 @@ dependencies = [
  "cfg-if",
  "libc",
  "rand 0.8.4",
- "redox_syscall",
+ "redox_syscall 0.2.10",
  "remove_dir_all",
+ "winapi",
+]
+
+[[package]]
+name = "thread-id"
+version = "3.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7fbf4c9d56b320106cd64fd024dadfa0be7cb4706725fc44a7d7ce952d820c1"
+dependencies = [
+ "libc",
+ "redox_syscall 0.1.57",
  "winapi",
 ]
 

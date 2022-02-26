@@ -7,7 +7,8 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-coap = { git = "https://github.com/google/rust-async-coap.git", ref = "71245d4" }
+#async-coap = { git = "https://github.com/google/rust-async-coap.git", rev = "71245d4" }
+async-coap = { git = "https://github.com/hubertmis/rust-async-coap.git", branch = "pr/use-trace-instead-of-println" }
 serde = { version = "1", features = ["derive"] }
 ciborium = "0.2"
 tokio = { version = "1", features = ["full"] }
@@ -18,3 +19,5 @@ futures = "0.3"
 rust_decimal = "1.19"
 rust_decimal_macros = "1.19"
 rand = "0.8"
+log = "0.4"
+simple-logging = "2.0"

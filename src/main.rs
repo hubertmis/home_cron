@@ -318,6 +318,8 @@ async fn send_request(local_endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSock
 
 #[tokio::main]
 async fn main() {
+    simple_logging::log_to_stderr(log::LevelFilter::Warn);
+
     let udp_socket = Socket::new(Domain::IPV6, Type::DGRAM, None).expect("Socket creating failed");
     let address: SocketAddr = "[::]:0".parse().unwrap();
     let address = address.into();
