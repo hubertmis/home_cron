@@ -65,6 +65,13 @@ async fn main() {
         floor_heating.process().await;
     }));
 
+    let ac_endpoint = local_endpoint.clone();
+    let hvac_state_for_ac = hvac_state.clone();
+    tasks.push(tokio::spawn(async move {
+        let ac = actuators::Ac::new(ac_endpoint, hvac_state_for_ac);
+        ac.process().await;
+    }));
+
     for task in tasks {
         task.await.expect("Failed infinite task");
     }
