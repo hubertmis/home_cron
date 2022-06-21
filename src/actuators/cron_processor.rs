@@ -1,18 +1,22 @@
 use chrono::prelude::*;
 use futures::prelude::*;
+use std::boxed::Box;
+use std::pin::Pin;
 use std::time::{Duration, SystemTime};
 
-#[derive(Debug)]
-pub struct Action<'a, V> {
+pub struct Action
+{
     time: SystemTime,
-    action_list: Vec<(&'a str, V)>,
+    function: Pin<Box<dyn Future<Output=()> + Send>>,
 }
 
-impl<'a, V> Action<'a, V> {
-    pub fn new(time: SystemTime, action_list: Vec<(&'a str, V)>) -> Self {
+impl Action
+{
+    pub fn new(time: SystemTime, function: impl Future<Output=()> + Send + 'static) -> Self
+    {
         Action {
             time,
-            action_list,
+            function: Box::pin(function),
         }
     }
 }
@@ -24,19 +28,16 @@ impl CronProcessor {
         CronProcessor {}
     }
 
-    pub async fn process<'a, V, FG, FGFut, FA, FAFut>(&self, get_actions: FG, run_action: FA)
+    pub async fn process<FG, FGFut>(&self, get_actions: FG)
         where
-        V: Copy + std::fmt::Debug,
         FG: Fn() -> FGFut,
-        FGFut: Future<Output = Vec<Action<'a, V>>>,
-        FA: Fn(&'a str, V) -> FAFut,
-        FAFut: 'a + Future<Output = Result<(), String>>,
+        FGFut: Future<Output = Vec<Action>>,
     {
         loop {
             let actions = get_actions().await;
 
             {
-                let mut next_action: Option<Action<V>> = None;
+                let mut next_action: Option<Action> = None;
                 let now = SystemTime::now();
                 for action in actions {
                     if action.time <= now {
@@ -47,23 +48,20 @@ impl CronProcessor {
                     }
                 }
                 
-                println!("Next action is: {:?}", next_action);
-
                 let next_action = next_action.unwrap(); // TODO: handle errors
                 let now = SystemTime::now();
                 let sleep_time = next_action.time.duration_since(now).map_err(|e| e.to_string()).unwrap(); // TODO: Handle errors
                 println!("Sleeping for {:?}", sleep_time);
                 tokio::time::sleep(sleep_time).await;
 
-                self.run_action(&next_action.action_list, &run_action, Some(4)).await;
+                next_action.function.await;
             }
         }
     }
 
-    async fn run_action<'a, F, C, Fut>(&self,
-                                       resources: &[(&'a str, C)],
-                                       action: &F,
-                                       num_tries: Option<u32>)
+    pub async fn run_action<'a, F, C, Fut>(resources: &[(&'a str, C)],
+                                           action: F,
+                                           num_tries: Option<u32>)
         where F: Fn(&'a str, C) -> Fut,
               C: Sized + Copy,
               Fut: futures::Future<Output = Result<(), String>>,

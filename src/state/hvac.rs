@@ -107,7 +107,7 @@ impl HvacState {
         for n in 0..72 {
             let hours = 72 - n;
             println!("Getting temperature for {} hours ago", hours);
-            let temp = web::Weather::new().get_temperature_history(token, Utc::now() - chrono::Duration::hours(hours)).await;
+            let temp = web::Weather::new(token).get_temperature_history(Utc::now() - chrono::Duration::hours(hours)).await;
             println!("Temp: {:?}", temp);
             self.ext_temp_history.lock().await.push(temp.unwrap());
         }
