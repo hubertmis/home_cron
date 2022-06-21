@@ -27,7 +27,7 @@ impl Ac {
         match self.hvac_state.get_state().await {
             HcState::HeatingActive | HcState::HeatingPassive | HcState::CoolingPassive => {
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("bac", (false, 'a')));
+                evening_action_list.push(("bac", (false, 'a', 25)));
 
                 let evening_endpoint = self.local_endpoint.clone();
 
@@ -41,10 +41,10 @@ impl Ac {
             },
             HcState::CoolingActive => {
                 let mut morning_action_list = Vec::new();
-                morning_action_list.push(("bac", (true, 'a')));
+                morning_action_list.push(("bac", (true, 'a', 24)));
                 
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("bac", (true, '1')));
+                evening_action_list.push(("bac", (true, 'a', 26)));
 
                 let morning_endpoint = self.local_endpoint.clone();
                 let evening_endpoint = self.local_endpoint.clone();
@@ -69,12 +69,13 @@ impl Ac {
         actions
     }
 
-    async fn set_ac(endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, rsrc: &str, target: (bool, char)) -> Result<(), String> {
+    async fn set_ac(endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, rsrc: &str, target: (bool, char, u8)) -> Result<(), String> {
         let addr = coap::ServiceDiscovery::new(endpoint.clone()).service_discovery(rsrc, None).await?;
         coap::Basic::new(endpoint.clone()).send_setter_with_writer(&addr, rsrc, |msg_wrt| {
              let mut payload = BTreeMap::new();
              payload.insert("o", ciborium::value::Value::Bool(target.0));
              payload.insert("f", ciborium::value::Value::Integer((target.1 as u8).try_into().unwrap()));
+             payload.insert("t", ciborium::value::Value::Integer(target.2.try_into().unwrap()));
 
              ciborium::ser::into_writer(&payload, msg_wrt).unwrap();
              Ok(())
