@@ -115,13 +115,27 @@ impl HvacState {
         let mut last_measurement_time = Utc::now() - chrono::Duration::hours(1);
 
         loop {
-            let curr_val = coap::Weather::new(local_endpoint.clone()).get_temperature().await.unwrap();
-            async {
-                let mut temp_history = self.ext_temp_history.lock().await;
-                temp_history.remove(0);
-                temp_history.push(curr_val);
-                println!("Temp: {:?}", curr_val);
-            }.await;
+            // TODO: Some retries, trying other sources?
+            let curr_val = coap::Weather::new(local_endpoint.clone()).get_temperature().await;
+            if let Ok(curr_val) = curr_val {
+                async {
+                    let mut temp_history = self.ext_temp_history.lock().await;
+                    temp_history.remove(0);
+                    temp_history.push(curr_val);
+                    println!("Temp: {:?}", curr_val);
+                }.await;
+            } else {
+                // Could not get temperature. Copy last one as fallback solution
+                async {
+                    let mut temp_history = self.ext_temp_history.lock().await;
+                    let last = temp_history.last().cloned();
+                    if let Some(last) = last {
+                        temp_history.remove(0);
+                        temp_history.push(last);
+                        println!("Guessing temp: {:?}", last);
+                    }
+                }.await;
+            }
 
             self.update_state().await;
 
