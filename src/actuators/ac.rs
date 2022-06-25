@@ -28,6 +28,8 @@ impl Ac {
             HcState::HeatingActive | HcState::HeatingPassive | HcState::CoolingPassive => {
                 let mut evening_action_list = Vec::new();
                 evening_action_list.push(("bac", (false, 'a', 25)));
+                evening_action_list.push(("dac", (false, 'a', 25)));
+                evening_action_list.push(("lac", (false, 'a', 25)));
 
                 let evening_endpoint = self.local_endpoint.clone();
 
@@ -42,9 +44,13 @@ impl Ac {
             HcState::CoolingActive => {
                 let mut morning_action_list = Vec::new();
                 morning_action_list.push(("bac", (true, 'a', 24)));
+                morning_action_list.push(("dac", (true, 'a', 24)));
+                morning_action_list.push(("lac", (true, 'a', 24)));
                 
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("bac", (true, 'a', 26)));
+                evening_action_list.push(("bac", (true, 'a', 25)));
+                evening_action_list.push(("dac", (true, 'a', 27)));
+                evening_action_list.push(("lac", (true, 'a', 27)));
 
                 let morning_endpoint = self.local_endpoint.clone();
                 let evening_endpoint = self.local_endpoint.clone();
@@ -76,6 +82,7 @@ impl Ac {
              payload.insert("o", ciborium::value::Value::Bool(target.0));
              payload.insert("f", ciborium::value::Value::Integer((target.1 as u8).try_into().unwrap()));
              payload.insert("t", ciborium::value::Value::Integer(target.2.try_into().unwrap()));
+             payload.insert("m", ciborium::value::Value::Integer(('c' as u8).try_into().unwrap()));
 
              ciborium::ser::into_writer(&payload, msg_wrt).unwrap();
              Ok(())
