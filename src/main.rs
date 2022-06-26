@@ -76,6 +76,12 @@ async fn main() {
         ac.process().await;
     }));
 
+    let leds_endpoint = local_endpoint.clone();
+    tasks.push(tokio::spawn(async move {
+        let leds = actuators::Leds::new(leds_endpoint);
+        leds.process().await;
+    }));
+
     /*
     tasks.push(tokio::spawn(async move {
         use chrono::{DateTime, TimeZone, NaiveDateTime, Utc};
