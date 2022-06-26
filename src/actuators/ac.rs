@@ -27,9 +27,9 @@ impl Ac {
         match self.hvac_state.get_state().await {
             HcState::HeatingActive | HcState::HeatingPassive | HcState::CoolingPassive => {
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("bac", (false, 'a', 25)));
-                evening_action_list.push(("dac", (false, 'a', 25)));
-                evening_action_list.push(("lac", (false, 'a', 25)));
+                evening_action_list.push(("bac", (false, 'a', 26)));
+                evening_action_list.push(("dac", (false, 'a', 26)));
+                evening_action_list.push(("lac", (false, 'a', 26)));
 
                 let evening_endpoint = self.local_endpoint.clone();
 
@@ -43,14 +43,14 @@ impl Ac {
             },
             HcState::CoolingActive => {
                 let mut morning_action_list = Vec::new();
-                morning_action_list.push(("bac", (true, 'a', 24)));
-                morning_action_list.push(("dac", (true, 'a', 24)));
-                morning_action_list.push(("lac", (true, 'a', 24)));
+                morning_action_list.push(("bac", (true, 'a', 25)));
+                morning_action_list.push(("dac", (true, 'a', 25)));
+                morning_action_list.push(("lac", (true, 'a', 25)));
                 
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("bac", (true, 'a', 25)));
-                evening_action_list.push(("dac", (true, 'a', 27)));
-                evening_action_list.push(("lac", (true, 'a', 27)));
+                evening_action_list.push(("bac", (true, 'a', 26)));
+                evening_action_list.push(("dac", (true, 'a', 28)));
+                evening_action_list.push(("lac", (true, 'a', 28)));
 
                 let morning_endpoint = self.local_endpoint.clone();
                 let evening_endpoint = self.local_endpoint.clone();
