@@ -32,7 +32,7 @@ impl Leds {
         let evening_endpoint = self.local_endpoint.clone();
 
         actions.push(Action::new(
-            CronProcessor::time_to_timestamp(NaiveTime::from_hms(22, 21, 0)),
+            CronProcessor::time_to_timestamp(NaiveTime::from_hms(9, 0, 0)),
             async move {
                 let endpoint = &morning_endpoint.clone();
                 CronProcessor::run_action(&morning_action_list, |r, v| async move {Self::set_led(endpoint, r, v).await}, None).await
