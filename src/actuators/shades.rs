@@ -1,7 +1,7 @@
 use async_coap::datagram::{DatagramLocalEndpoint, AllowStdUdpSocket};
 use chrono::prelude::*;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use crate::actuators::cron_processor::{Action, CronProcessor};
 use crate::coap;
@@ -26,6 +26,28 @@ impl Shades {
         }
     }
 
+    async fn get_twilight_pair() -> [SystemTime; 2]
+    {
+        let morning = NaiveTime::from_hms(7, 0, 0);
+        let evening = NaiveTime::from_hms(19, 0, 0);
+        let today = Utc::today();
+        let tomorrow = today.succ();
+
+        let today_morning = today.and_time(morning).unwrap();
+        let today_evening = today.and_time(evening).unwrap();
+        let tomorrow_morning = tomorrow.and_time(morning).unwrap();
+        let tomorrow_evening = tomorrow.and_time(evening).unwrap();
+        let now = Utc::now();
+
+        let morning_datetime = if now > today_morning { tomorrow_morning } else { today_morning };
+        let evening_datetime = if now > today_evening { tomorrow_evening } else { today_evening };
+
+        web::Twilight::new().get_pair().await.or::<Result<[SystemTime; 2], String>>(
+            Ok([morning_datetime.try_into().unwrap(),
+                evening_datetime.try_into().unwrap()]))
+            .unwrap()
+    }
+
     async fn get_action_list(&self) -> Vec<Action>
     {
         let mut actions = Vec::new();
@@ -47,15 +69,19 @@ impl Shades {
                 let morning_endpoint = self.local_endpoint.clone();
                 let evening_endpoint = self.local_endpoint.clone();
 
+                let twilight_pair =  Shades::get_twilight_pair().await;
+                let morning_time = twilight_pair[0];
+                let evening_time = twilight_pair[1];
+
                 actions.push(Action::new(
-                    web::Twilight::new().get_pair().await.unwrap()[0],
+                    morning_time,
                     async move {
                         let endpoint = &morning_endpoint.clone();
                         CronProcessor::run_action(&morning_action_list, |r, v| async move {Self::move_shades(endpoint, r, v).await}, None).await
                     }
                 ));
                 actions.push(Action::new(
-                    web::Twilight::new().get_pair().await.unwrap()[1],
+                    evening_time,
                     async move {
                         let endpoint = &evening_endpoint.clone();
                         CronProcessor::run_action(&evening_action_list, |r, v| async move {Self::move_shades(endpoint, r, v).await}, None).await
@@ -80,9 +106,10 @@ impl Shades {
                 let noon_endpoint = self.local_endpoint.clone();
 
                 let morning_weather = self.weather.clone();
+                let morning_time = Shades::get_twilight_pair().await[0];
 
                 actions.push(Action::new(
-                    web::Twilight::new().get_pair().await.unwrap()[0],
+                    morning_time,
                     async move {
                         let forecast = morning_weather.get_forecast(&Duration::from_secs(3600*6)).await;
                         if forecast.is_ok() {
