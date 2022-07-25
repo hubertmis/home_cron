@@ -21,12 +21,15 @@ impl Leds {
         let mut actions = Vec::new();
         
         let mut morning_action_list = Vec::new();
-        morning_action_list.push(("bbl", (0, 0, 0, 255, 1000)));
+        morning_action_list.push(("bbl", (0, 0, 0, 0, 0)));
         morning_action_list.push(("bwl", (0, 0, 0, 0, 0)));
+        morning_action_list.push(("drl", (0, 0, 0, 0, 0)));
         
+        // TODO: Moon phases?
         let mut evening_action_list = Vec::new();
-        evening_action_list.push(("bbl", (0, 0, 0, 0, 1000)));
-        evening_action_list.push(("bwl", (0, 0, 0, 5, 0)));
+        evening_action_list.push(("bbl", (0, 0, 0, 0, 0)));
+        evening_action_list.push(("bwl", (0, 0, 0, 35, 0)));
+        evening_action_list.push(("drl", (0, 0, 0, 80, 0)));
 
         let morning_endpoint = self.local_endpoint.clone();
         let evening_endpoint = self.local_endpoint.clone();
