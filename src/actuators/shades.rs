@@ -28,19 +28,9 @@ impl Shades {
 
     async fn get_twilight_pair() -> [SystemTime; 2]
     {
-        let morning = NaiveTime::from_hms(7, 0, 0);
-        let evening = NaiveTime::from_hms(19, 0, 0);
-        let today = Utc::today();
-        let tomorrow = today.succ();
-
-        let today_morning = today.and_time(morning).unwrap();
-        let today_evening = today.and_time(evening).unwrap();
-        let tomorrow_morning = tomorrow.and_time(morning).unwrap();
-        let tomorrow_evening = tomorrow.and_time(evening).unwrap();
-        let now = Utc::now();
-
-        let morning_datetime = if now > today_morning { tomorrow_morning } else { today_morning };
-        let evening_datetime = if now > today_evening { tomorrow_evening } else { today_evening };
+        // TODO: Align it to the time of the year
+        let morning_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(6, 30, 0));
+        let evening_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(19, 0, 0));;
 
         web::Twilight::new().get_pair().await.or::<Result<[SystemTime; 2], String>>(
             Ok([morning_datetime.try_into().unwrap(),
