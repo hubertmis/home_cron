@@ -17,6 +17,9 @@ use clap::Parser;
 struct Args {
     #[clap(short, long)]
     openweathermap_token: String,
+
+    #[clap(short, long)]
+    qweather_key: String,
 }
 
 #[tokio::main]
@@ -24,6 +27,12 @@ async fn main() {
     simple_logging::log_to_stderr(log::LevelFilter::Warn);
 
     let args = Args::parse();
+
+    async {
+        let moon = web::Moon::new(&args.qweather_key.clone());
+        let result = moon.get_phase().await;
+        println!("Moon result: {:?}", result);
+    }.await;
 
     let udp_socket = Socket::new(Domain::IPV6, Type::DGRAM, None).expect("Socket creating failed");
     let address: SocketAddr = "[::]:0".parse().unwrap();
