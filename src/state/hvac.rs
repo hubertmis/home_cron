@@ -17,6 +17,7 @@ pub enum HcState {
 
 pub struct HvacState {
     ext_temp_history: tokio::sync::Mutex<Vec<Decimal>>,
+    ext_temp_forecast: tokio::sync::Mutex<Option<Decimal>>,
     state: tokio::sync::Mutex<Option<HcState>>,
 }
 
@@ -24,6 +25,7 @@ impl HvacState {
     pub fn new() -> Self {
         HvacState {
             ext_temp_history: tokio::sync::Mutex::new(Vec::with_capacity(72)),
+            ext_temp_forecast: tokio::sync::Mutex::new(None),
             state: tokio::sync::Mutex::new(None),
         }
     }
@@ -104,10 +106,12 @@ impl HvacState {
 
     pub async fn process(&self, local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, token: &str) -> Result<(), String> {
         println!("Starting processing hvac state");
+        let weather = web::Weather::new(token);
+
         for n in 0..72 {
             let hours = 72 - n;
             println!("Getting temperature for {} hours ago", hours);
-            let temp = web::Weather::new(token).get_temperature_history(Utc::now() - chrono::Duration::hours(hours)).await;
+            let temp = weather.get_temperature_history(Utc::now() - chrono::Duration::hours(hours)).await;
             println!("Temp: {:?}", temp);
             self.ext_temp_history.lock().await.push(temp.unwrap());
         }
@@ -137,6 +141,18 @@ impl HvacState {
                 }.await;
             }
 
+            println!("Getting temperature forecast");
+            let forecast = weather.get_forecast(&Duration::from_secs(24 * 3600)).await;
+            async {
+                let mut temp_forecast = self.ext_temp_forecast.lock().await;
+                if let Ok(forecast) = forecast {
+                    *temp_forecast = Some(forecast.get_temperature());
+                    println!("Temp: {:?}", *temp_forecast);
+                } else {
+                    *temp_forecast = None;
+                }
+            }.await;
+
             self.update_state().await;
 
             // Wait one more hour
@@ -148,7 +164,7 @@ impl HvacState {
         }
     }
 
-    pub async fn average(&self) -> Decimal {
+    async fn past_average(&self) -> Decimal {
         let vec = self.ext_temp_history.lock().await;
         let mut sum = Decimal::new(0, 0);
         for val in vec.iter() {
@@ -157,6 +173,20 @@ impl HvacState {
         let avg = sum / Decimal::new(vec.len().try_into().unwrap(), 0);
 
         avg
+    }
+
+    pub async fn average(&self) -> Decimal {
+        let past_avg = self.past_average().await;
+        let forecast = self.ext_temp_forecast.lock().await;
+
+        if let Some(future_avg) = *forecast {
+            let sum = past_avg + future_avg;
+            let avg = sum / Decimal::new(2, 0);
+
+            avg
+        } else {
+            past_avg
+        }
     }
 }
 

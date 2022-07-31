@@ -5,10 +5,15 @@ use std::time::Duration;
 #[derive(Debug)]
 pub struct Forecast
 {
+    temperature: Decimal,
     cloudiness: u32,
 }
 
 impl Forecast {
+    pub fn get_temperature(&self) -> Decimal {
+        self.temperature
+    }
+
     pub fn get_cloudiness(&self) -> u32 {
         self.cloudiness
     }
@@ -56,10 +61,20 @@ impl Weather {
         let list = result.get("list").ok_or("Missing \"list\" in server response")?
             .as_array().ok_or("\"list\" is not an array")?;
 
+        let mut temp: f64 = 0.0;
         let mut forecast = Forecast {
             cloudiness: 0,
+            temperature: Decimal::new(0, 0),
         };
         for item in list {
+            if let serde_json::value::Value::Number(temperature) = item
+                    .get("main").ok_or("Missing \"main\" entry in one element in the list")?
+                    .get("temp").ok_or("Missing \"temp\" for \"main\"")? {
+                temp += temperature.as_f64().ok_or("Temperature cannot be converted to f64")?;
+            } else {
+                return Err("Unexpected type of \"temp\" for \"main\"".to_string());
+            }
+
             if let serde_json::value::Value::Number(cloudiness) = item
                     .get("clouds").ok_or("Missing \"coulds\" entry in one element in the list")?
                     .get("all").ok_or("Missing \"all\" for clouds")? {
@@ -71,7 +86,11 @@ impl Weather {
             }
         }
 
-        forecast.cloudiness /= u32::try_from(list.len()).map_err(|e: std::num::TryFromIntError| e.to_string())?;
+        let num_items = u32::try_from(list.len()).map_err(|e: std::num::TryFromIntError| e.to_string())?;
+
+        let temp_f64 = (temp / (num_items as f64)).round();
+        forecast.temperature = Decimal::from_f64(temp_f64).ok_or(format!("Cannot convert {} to Decimal", temp_f64))?;
+        forecast.cloudiness /= num_items;
         Ok(forecast)
     }
 }
