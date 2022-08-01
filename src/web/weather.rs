@@ -88,7 +88,7 @@ impl Weather {
 
         let num_items = u32::try_from(list.len()).map_err(|e: std::num::TryFromIntError| e.to_string())?;
 
-        let temp_f64 = (temp / (num_items as f64)).round();
+        let temp_f64 = temp / (num_items as f64);
         forecast.temperature = Decimal::from_f64(temp_f64).ok_or(format!("Cannot convert {} to Decimal", temp_f64))?;
         forecast.cloudiness /= num_items;
         Ok(forecast)
