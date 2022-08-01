@@ -30,7 +30,7 @@ impl Shades {
     {
         // TODO: Align it to the time of the year
         let morning_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(6, 30, 0));
-        let evening_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(19, 0, 0));;
+        let evening_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(19, 0, 0));
 
         web::Twilight::new().get_pair().await.or::<Result<[SystemTime; 2], String>>(
             Ok([morning_datetime.try_into().unwrap(),
@@ -105,6 +105,7 @@ impl Shades {
                         if forecast.is_ok() {
                             let forecast = forecast.unwrap();
                             if forecast.get_cloudiness() > 50 {
+                                println!("Expected morning clouds: {}. Skip shading", forecast.get_cloudiness());
                                 return ()
                             }
                         }
