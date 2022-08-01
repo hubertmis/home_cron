@@ -28,8 +28,9 @@ async fn main() {
 
     let args = Args::parse();
 
+    let moon = web::Moon::new(&args.qweather_key.clone());
+
     async {
-        let moon = web::Moon::new(&args.qweather_key.clone());
         let result = moon.get_phase().await;
         println!("Moon result: {:?}", result);
     }.await;
@@ -87,7 +88,7 @@ async fn main() {
 
     let leds_endpoint = local_endpoint.clone();
     tasks.push(tokio::spawn(async move {
-        let leds = actuators::Leds::new(leds_endpoint);
+        let leds = actuators::Leds::new(leds_endpoint, Arc::new(moon));
         leds.process().await;
     }));
 
