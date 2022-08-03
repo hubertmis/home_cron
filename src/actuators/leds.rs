@@ -2,6 +2,7 @@ use async_coap::datagram::{DatagramLocalEndpoint, AllowStdUdpSocket};
 use chrono::prelude::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use crate::actuators::cron_processor::{Action, CronProcessor};
 use crate::coap;
@@ -19,6 +20,19 @@ impl Leds {
             local_endpoint,
             moon,
         }
+    }
+
+    async fn get_twilight_pair() -> [SystemTime; 2]
+    {
+        // TODO: Align it to the time of the year
+        // TODO: Reuse with shades?
+        let morning_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(6, 30, 0));
+        let evening_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(20, 0, 0));
+
+        web::Twilight::new().get_pair().await.or::<Result<[SystemTime; 2], String>>(
+            Ok([morning_datetime.try_into().unwrap(),
+                evening_datetime.try_into().unwrap()]))
+            .unwrap()
     }
 
     async fn get_action_list(&self) -> Vec<Action> {
@@ -49,15 +63,19 @@ impl Leds {
         let morning_endpoint = self.local_endpoint.clone();
         let evening_endpoint = self.local_endpoint.clone();
 
+        let twilight_pair = Self::get_twilight_pair().await;
+        let morning_time = twilight_pair[0];
+        let evening_time = twilight_pair[1];
+
         actions.push(Action::new(
-            CronProcessor::time_to_timestamp(NaiveTime::from_hms(9, 0, 0)),
+            morning_time,
             async move {
                 let endpoint = &morning_endpoint.clone();
                 CronProcessor::run_action(&morning_action_list, |r, v| async move {Self::set_led(endpoint, r, v).await}, None).await
             }
         ));
         actions.push(Action::new(
-            CronProcessor::time_to_timestamp(NaiveTime::from_hms(20, 0, 0)),
+            evening_time,
             async move {
                 let endpoint = &evening_endpoint.clone();
                 CronProcessor::run_action(&evening_action_list, |r, v| async move {Self::set_led(endpoint, r, v).await}, None).await
