@@ -49,12 +49,14 @@ impl Shades {
                 morning_action_list.push(("dr1", 0));
                 morning_action_list.push(("dr2", 0));
                 morning_action_list.push(("dr3", 0));
+                morning_action_list.push(("k", 0));
 
                 let mut evening_action_list = Vec::new();
                 evening_action_list.push(("lr", 256));
                 evening_action_list.push(("dr1", 256));
                 evening_action_list.push(("dr2", 256));
                 evening_action_list.push(("dr3", 256));
+                evening_action_list.push(("k", 256));
 
                 let morning_endpoint = self.local_endpoint.clone();
                 let evening_endpoint = self.local_endpoint.clone();
