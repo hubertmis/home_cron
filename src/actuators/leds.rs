@@ -55,10 +55,12 @@ impl Leds {
         }
 
         let mut evening_action_list = Vec::new();
+        /*
         evening_action_list.push(("bbl", (0,0,0,0)));
         evening_action_list.push(("bwl", (0,0,0,0)));
         evening_action_list.push(("drl", rgbw));
         evening_action_list.push(("ll", (0,0,0,0)));
+        */
 
         let morning_endpoint = self.local_endpoint.clone();
         let evening_endpoint = self.local_endpoint.clone();
