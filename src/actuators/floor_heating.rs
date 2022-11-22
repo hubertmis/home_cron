@@ -24,19 +24,20 @@ impl FloorHeating {
 
 
     async fn get_action_list(&self) -> Vec<Action> {
+        let disabled = Decimal::new(175, 1);
         let mut actions = Vec::new();
 
         match self.hvac_state.get_state().await {
             HcState::HeatingActive | HcState::HeatingPassive => {
                 let mut morning_action_list = Vec::new();
-                morning_action_list.push(("gbrfh", Decimal::new(235, 1)));
-                morning_action_list.push(("mbrfh", Decimal::new(235, 1)));
-                morning_action_list.push(("kfh", Decimal::new(260, 1)));
+                morning_action_list.push(("gbrfh", Decimal::new(240, 1)));
+                morning_action_list.push(("mbrfh", Decimal::new(240, 1)));
+                morning_action_list.push(("kfh", Decimal::new(245, 1)));
 
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("gbrfh", Decimal::new(200, 1)));
-                evening_action_list.push(("mbrfh", Decimal::new(200, 1)));
-                evening_action_list.push(("kfh", Decimal::new(200, 1)));
+                evening_action_list.push(("gbrfh", disabled));
+                evening_action_list.push(("mbrfh", disabled));
+                evening_action_list.push(("kfh", disabled));
 
                 let morning_endpoint = self.local_endpoint.clone();
                 let evening_endpoint = self.local_endpoint.clone();
@@ -59,9 +60,9 @@ impl FloorHeating {
             },
             HcState::CoolingActive | HcState::CoolingPassive => {
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("gbrfh", Decimal::new(200, 1)));
-                evening_action_list.push(("mbrfh", Decimal::new(200, 1)));
-                evening_action_list.push(("kfh", Decimal::new(200, 1)));
+                evening_action_list.push(("gbrfh", disabled));
+                evening_action_list.push(("mbrfh", disabled));
+                evening_action_list.push(("kfh", disabled));
 
                 let evening_endpoint = self.local_endpoint.clone();
 
