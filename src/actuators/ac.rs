@@ -27,9 +27,10 @@ impl Ac {
         match self.hvac_state.get_state().await {
             HcState::HeatingActive | HcState::HeatingPassive | HcState::CoolingPassive => {
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("bac", (false, 'a', 26)));
-                evening_action_list.push(("dac", (false, 'a', 26)));
-                evening_action_list.push(("lac", (false, 'a', 26)));
+                evening_action_list.push(("bac", (false, 'a', 27)));
+                evening_action_list.push(("dac", (false, 'a', 27)));
+                evening_action_list.push(("lac", (false, 'a', 27)));
+                evening_action_list.push(("oac", (false, 'a', 27)));
 
                 let evening_endpoint = self.local_endpoint.clone();
 
@@ -43,14 +44,16 @@ impl Ac {
             },
             HcState::CoolingActive => {
                 let mut morning_action_list = Vec::new();
-                morning_action_list.push(("bac", (true, 'a', 25)));
-                morning_action_list.push(("dac", (true, 'a', 25)));
-                morning_action_list.push(("lac", (true, 'a', 25)));
+                morning_action_list.push(("bac", (true, 'a', 27)));
+                morning_action_list.push(("dac", (true, 'a', 27)));
+                morning_action_list.push(("lac", (true, 'a', 27)));
+                morning_action_list.push(("oac", (true, 'a', 27)));
                 
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("bac", (true, 'a', 25)));
-                evening_action_list.push(("dac", (true, 'a', 28)));
-                evening_action_list.push(("lac", (true, 'a', 28)));
+                evening_action_list.push(("bac", (true, 'a', 28)));
+                evening_action_list.push(("dac", (true, 'a', 29)));
+                evening_action_list.push(("lac", (true, 'a', 29)));
+                evening_action_list.push(("oac", (true, 'a', 29)));
 
                 let morning_endpoint = self.local_endpoint.clone();
                 let evening_endpoint = self.local_endpoint.clone();
