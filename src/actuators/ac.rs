@@ -44,16 +44,16 @@ impl Ac {
             },
             HcState::CoolingActive => {
                 let mut morning_action_list = Vec::new();
-                morning_action_list.push(("bac", (true, 'a', 27)));
-                morning_action_list.push(("dac", (true, 'a', 27)));
-                morning_action_list.push(("lac", (true, 'a', 27)));
-                morning_action_list.push(("oac", (true, 'a', 27)));
+                morning_action_list.push(("bac", (true, 'a', 26)));
+                morning_action_list.push(("dac", (true, 'a', 26)));
+                morning_action_list.push(("lac", (true, 'a', 26)));
+                morning_action_list.push(("oac", (true, 'a', 26)));
                 
                 let mut evening_action_list = Vec::new();
-                evening_action_list.push(("bac", (true, 'a', 28)));
-                evening_action_list.push(("dac", (true, 'a', 29)));
-                evening_action_list.push(("lac", (true, 'a', 29)));
-                evening_action_list.push(("oac", (true, 'a', 29)));
+                evening_action_list.push(("bac", (true, 'a', 27)));
+                evening_action_list.push(("dac", (true, 'a', 28)));
+                evening_action_list.push(("lac", (true, 'a', 28)));
+                evening_action_list.push(("oac", (true, 'a', 28)));
 
                 let morning_endpoint = self.local_endpoint.clone();
                 let evening_endpoint = self.local_endpoint.clone();
