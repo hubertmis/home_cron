@@ -1,37 +1,34 @@
-use async_coap::datagram::{DatagramLocalEndpoint, AllowStdUdpSocket};
-use async_coap::prelude::*;
+use home_mng::Coap;
 use rust_decimal::prelude::*;
-use std::collections::BTreeMap;
-use std::sync::Arc;
 
-use crate::coap::Basic;
-use crate::coap::CborParser;
-use crate::coap::ServiceDiscovery;
+use crate::coap::{CborParser, ServiceDiscovery};
 
 pub struct Weather {
-    local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>,
+    coap: Coap,
 }
 
 impl Weather {
-    pub fn new(local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>) -> Self {
+    pub fn new() -> Self {
         Weather {
-            local_endpoint
+            coap: Coap::new(),
         }
     }
 
     pub async fn get_temperature(&self) -> Result<Decimal, String> {
-        let addr = ServiceDiscovery::new(self.local_endpoint.clone()).service_discovery("bac", None).await?;
-        let mut curr_val = Decimal::new(0,0);
-        Basic::new(self.local_endpoint.clone()).send_getter(&addr, "bac/temp", |context| {
-            let data : BTreeMap<String, ciborium::value::Value> = 
-                ciborium::de::from_reader(context?.message().payload())
-                    .map_err(|_| async_coap::Error::ParseFailure)?;
-            curr_val = CborParser::to_decimal(
-                data.get(&"e".to_string()).unwrap())  // TODO: Handle None
-                    .map_err(|_| async_coap::Error::ParseFailure)?;
-            Ok(ResponseStatus::Done(()))
-        }).await?;
+        let addr = ServiceDiscovery::new(&self.coap).discover_single("bac").await?;
+        let mut temps = self.coap.get(&addr, "bac/temp", None).await
+            .map_err(|e| e.to_string())?
+            .ok_or("No temperature content returned by bac/temp")?
+            .as_cbor_map().ok_or("Unexpected temperature content returned by bac/temp")?
+            .iter()
+            .filter(|e| e.0.as_text()
+                    .is_some_and(|t| t == "e"))
+            .map(|e| CborParser::to_decimal(&e.1))
+            .collect::<Vec<_>>();
 
-        Ok(curr_val)
+        if temps.len() != 1 {
+            return Err("Unexpected structure returned by bac/temp".to_string());
+        }
+        temps.remove(0)
     }
 }

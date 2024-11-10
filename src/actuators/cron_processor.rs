@@ -92,12 +92,13 @@ impl CronProcessor {
     
     pub fn time_to_timestamp(time: NaiveTime) -> SystemTime {
         let now = Local::now();
-        let today = now.date();
-        let tomorrow = today.succ();
-        let today_time = today.and_time(time).unwrap();
-        let tomorrow_time = tomorrow.and_time(time).unwrap();
+        let today = now.date_naive();
+        let tomorrow = today.succ_opt().unwrap();
+        let today_time = today.and_time(time);
+        let tomorrow_time = tomorrow.and_time(time);
+        let today_time_with_tz = today_time.and_local_timezone(Local).earliest().unwrap(); // TODO: handle gap
 
-        let target_time = if now > today_time { tomorrow_time } else { today_time };
-        target_time.try_into().unwrap()
+        let target_time = if now > today_time_with_tz { tomorrow_time } else { today_time };
+        target_time.and_utc().try_into().unwrap()
     }
 }

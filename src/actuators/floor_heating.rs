@@ -1,23 +1,19 @@
-use async_coap::datagram::{DatagramLocalEndpoint, AllowStdUdpSocket};
 use chrono::prelude::*;
 use rust_decimal::prelude::*;
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::actuators::cron_processor::{Action, CronProcessor};
 use crate::coap;
+use crate::coap::{basic, CborMap};
 use crate::state::{HcState, HvacState};
 
 pub struct FloorHeating {
-    local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>,
     hvac_state: Arc<HvacState>,
 }
 
 impl FloorHeating {
-    pub fn new(local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>,
-               hvac_state: Arc<HvacState>) -> Self {
+    pub fn new(hvac_state: Arc<HvacState>) -> Self {
         FloorHeating {
-            local_endpoint,
             hvac_state,
         }
     }
@@ -39,21 +35,16 @@ impl FloorHeating {
                 evening_action_list.push(("mbrfh", disabled));
                 evening_action_list.push(("kfh", disabled));
 
-                let morning_endpoint = self.local_endpoint.clone();
-                let evening_endpoint = self.local_endpoint.clone();
-
                 actions.push(Action::new(
-                    CronProcessor::time_to_timestamp(NaiveTime::from_hms(7, 0, 0)),
+                    CronProcessor::time_to_timestamp(NaiveTime::from_hms_opt(7, 0, 0).unwrap()),
                     async move {
-                        let endpoint = &morning_endpoint.clone();
-                        CronProcessor::run_action(&morning_action_list, |r, v| async move {Self::set_temperature(endpoint, r, &v).await}, None).await
+                        CronProcessor::run_action(&morning_action_list, |r, v| async move {Self::set_temperature(r, &v).await}, None).await
                     }
                 ));
                 actions.push(Action::new(
-                    CronProcessor::time_to_timestamp(NaiveTime::from_hms(23, 0, 0)),
+                    CronProcessor::time_to_timestamp(NaiveTime::from_hms_opt(23, 0, 0).unwrap()),
                     async move {
-                        let endpoint = &evening_endpoint.clone();
-                        CronProcessor::run_action(&evening_action_list, |r, v| async move {Self::set_temperature(endpoint, r, &v).await}, None).await
+                        CronProcessor::run_action(&evening_action_list, |r, v| async move {Self::set_temperature(r, &v).await}, None).await
                     }
                 ));
                 println!("Heating");
@@ -64,13 +55,10 @@ impl FloorHeating {
                 evening_action_list.push(("mbrfh", disabled));
                 evening_action_list.push(("kfh", disabled));
 
-                let evening_endpoint = self.local_endpoint.clone();
-
                 actions.push(Action::new(
-                    CronProcessor::time_to_timestamp(NaiveTime::from_hms(23, 0, 0)),
+                    CronProcessor::time_to_timestamp(NaiveTime::from_hms_opt(23, 0, 0).unwrap()),
                     async move {
-                        let endpoint = &evening_endpoint.clone();
-                        CronProcessor::run_action(&evening_action_list, |r, v| async move {Self::set_temperature(endpoint, r, &v).await}, None).await
+                        CronProcessor::run_action(&evening_action_list, |r, v| async move {Self::set_temperature(r, &v).await}, None).await
                     }
                 ));
                 println!("Cooling");
@@ -88,14 +76,12 @@ impl FloorHeating {
         ).await;
     }
 
-    async fn set_temperature(endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, rsrc: &str, target: &Decimal) -> Result<(), String> {
-        let addr = coap::ServiceDiscovery::new(endpoint.clone()).service_discovery(rsrc, None).await?;
-        coap::Basic::new(endpoint.clone()).send_setter_with_writer(&addr, rsrc, |msg_wrt| {
-            let mut payload = BTreeMap::new();
-            payload.insert("s", coap::CborParser::from_decimal(target).map_err(|_e| async_coap::Error::InvalidArgument)?);
+    async fn set_temperature(rsrc: &str, target: &Decimal) -> Result<(), String> {
+        let payload = [
+                ("s", coap::CborParser::from_decimal(target).map_err(|e| e.to_string())?),
+        ];
+        let payload = CborMap::from_slice(&payload);
 
-            ciborium::ser::into_writer(&payload, msg_wrt).unwrap();
-            Ok(())
-        }).await
+        basic::set_actuator(rsrc, payload).await
     }
 }

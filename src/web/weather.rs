@@ -1,4 +1,5 @@
 use chrono::prelude::*;
+use chrono::DateTime;
 use rust_decimal::prelude::*;
 use std::time::Duration;
 
@@ -21,38 +22,69 @@ impl Forecast {
 
 pub struct Weather
 {
-    openweather_key: String,
+    openweather_key: Option<String>,
+    visualcrossing_key: Option<String>,
 }
 
 impl Weather {
-    pub fn new(openweather_key: &str) -> Self {
+    pub fn new(openweather_key: Option<String>, visualcrossing_key: Option<String>) -> Self {
         Weather {
-            openweather_key: openweather_key.to_string(),
+            openweather_key,
+            visualcrossing_key,
         }
     }
 
-    pub async fn get_temperature_history<Tz: TimeZone>(&self, time: DateTime<Tz>) -> Result<Decimal, String> {
-        let url = format!("https://api.openweathermap.org/data/2.5/onecall/timemachine?lat=50.061389&lon=19.938333&dt={}&appid={}&units=metric",
-                          time.timestamp(),
-                          &self.openweather_key
+    pub async fn get_temperature_history<Tz>(&self, start_time: DateTime<Tz>, end_time: DateTime<Tz>) -> Result<Vec<Decimal>, String> 
+    where
+    Tz: TimeZone,
+    Tz::Offset: std::fmt::Display,
+    {
+        let url = format!("https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/Krakow,PL/{}/{}?include=hours&elements=datetimeEpoch,temp&unitGroup=metric&key={}",
+                          start_time.format("%Y-%m-%d"),
+                          end_time.format("%Y-%m-%d"),
+                          self.visualcrossing_key.as_ref()
+                            .ok_or("Missing visualcrossing key")?
                          );
         let result = reqwest::get(url).await.map_err(|e| e.to_string())?
             .json::<serde_json::value::Value>().await.map_err(|e| e.to_string())?;
 
-        if let serde_json::value::Value::Number(val) = result
-                .get("current").ok_or("Missing \"current\" in server response")?
-                .get("temp").ok_or("Missing \"current.temp\" in server response")? {
-            Ok(val.as_f64().ok_or("Temperature out of range")?.try_into().map_err(|e: rust_decimal::Error| e.to_string())?)
-        } else {
-            Err("Unexpected type of temperature".to_string())
-        }
+        result.get("days").ok_or("Missing days in server response")?
+            .as_array().ok_or("Received days ins not an array")?
+            .iter()
+            .map(|d| d
+                .get("hours").ok_or("Missing hours in server response")?
+                .as_array().ok_or("Received hours is not an array")?
+                .iter()
+                .map(|p| {
+                    Ok::<(DateTime<Utc>, Decimal), String>((
+                        DateTime::from_timestamp(p
+                            .get("datetimeEpoch").ok_or(format!("Received data pair {} misses datetimeEpoch", p))?
+                            .as_i64().ok_or(format!("Received datetimeEpoch in {} is not integer", p))?,
+                        0)
+                            .ok_or(format!("Can't parse timestamp received in {}", p))?,
+                        p.get("temp").ok_or(format!("Received data pair {} misses temp", p))?
+                            .as_f64().ok_or(format!("Received temp in {} is not a number", p))?
+                            .try_into().map_err(|e| format!("Can't covert temp in {} to Decimal: {}", p, e))?
+                    ))
+                })
+                .collect::<Result<Vec<(DateTime<Utc>, Decimal)>, String>>()
+            )
+            .collect::<Result<Vec<Vec<(DateTime<Utc>, Decimal)>>, String>>()?
+            .iter()
+            .flatten()
+            .filter(|p|
+                p.0 >= start_time &&
+                p.0 < end_time)
+            .map(|p| Ok::<Decimal, String>(p.1))
+            .collect::<Result<Vec<Decimal>, String>>()
     }
 
     pub async fn get_forecast(&self, dur: &Duration) -> Result<Forecast, String> {
         let secs_in_3_hours = 3600u64 * 3u64;
         let cnt = (dur.as_secs() + secs_in_3_hours - 1) / secs_in_3_hours;
         let url = format!("https://api.openweathermap.org/data/2.5/forecast?lat=50.061389&lon=19.938333&appid={}&units=metric&cnt={}",
-                          self.openweather_key,
+                          self.openweather_key.as_ref()
+                            .ok_or("Missing openweather key")?,
                           cnt
                          );
         let result = reqwest::get(url).await.map_err(|e| e.to_string())?

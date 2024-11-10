@@ -1,23 +1,18 @@
-use async_coap::datagram::{DatagramLocalEndpoint, AllowStdUdpSocket};
 use chrono::prelude::*;
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use crate::actuators::cron_processor::{Action, CronProcessor};
-use crate::coap;
+use crate::coap::{basic, CborMap};
 use crate::web;
 
 pub struct Leds {
-    local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>,
     moon: Arc<web::Moon>,
 }
 
 impl Leds {
-    pub fn new(local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>,
-               moon: Arc<web::Moon>) -> Self {
+    pub fn new(moon: Arc<web::Moon>) -> Self {
         Self {
-            local_endpoint,
             moon,
         }
     }
@@ -26,8 +21,8 @@ impl Leds {
     {
         // TODO: Align it to the time of the year
         // TODO: Reuse with shades?
-        let morning_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(6, 30, 0));
-        let evening_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(20, 0, 0));
+        let morning_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms_opt(6, 30, 0).unwrap());
+        let evening_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms_opt(20, 0, 0).unwrap());
 
         web::Twilight::new().get_pair().await.or::<Result<[SystemTime; 2], String>>(
             Ok([morning_datetime.try_into().unwrap(),
@@ -54,16 +49,13 @@ impl Leds {
             rgbw.2 = (210_f64 * factor).round() as u16;
         }
 
-        let mut evening_action_list = Vec::new();
         /*
+        let mut evening_action_list = Vec::new();
         evening_action_list.push(("bbl", (0,0,0,0)));
         evening_action_list.push(("bwl", (0,0,0,0)));
         evening_action_list.push(("drl", rgbw));
         evening_action_list.push(("ll", (0,0,0,0)));
         */
-
-        let morning_endpoint = self.local_endpoint.clone();
-        let evening_endpoint = self.local_endpoint.clone();
 
         let twilight_pair = Self::get_twilight_pair().await;
         let morning_time = twilight_pair[0];
@@ -72,33 +64,28 @@ impl Leds {
         actions.push(Action::new(
             morning_time,
             async move {
-                let endpoint = &morning_endpoint.clone();
-                CronProcessor::run_action(&morning_action_list, |r, v| async move {Self::set_led(endpoint, r, v).await}, None).await
+                CronProcessor::run_action(&morning_action_list, |r, v| async move {Self::set_led(r, v).await}, None).await
             }
         ));
         actions.push(Action::new(
             evening_time,
             async move {
-                let endpoint = &evening_endpoint.clone();
-                CronProcessor::run_action(&evening_action_list, |r, v| async move {Self::set_led(endpoint, r, v).await}, None).await
             }
         ));
 
         actions
     }
 
-    async fn set_led(endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, rsrc: &str, target: (u16, u16, u16, u16)) -> Result<(), String> {
-        let addr = coap::ServiceDiscovery::new(endpoint.clone()).service_discovery(rsrc, None).await?;
-        let rsrc = format!("{}/auto", rsrc);
-        coap::Basic::new(endpoint.clone()).send_setter_with_writer(&addr, &rsrc, |msg_wrt| { let mut payload = BTreeMap::new();
-             payload.insert("r", ciborium::value::Value::Integer(target.0.try_into().unwrap()));
-             payload.insert("g", ciborium::value::Value::Integer(target.1.try_into().unwrap()));
-             payload.insert("b", ciborium::value::Value::Integer(target.2.try_into().unwrap()));
-             payload.insert("w", ciborium::value::Value::Integer(target.3.try_into().unwrap()));
+    async fn set_led(rsrc: &str, target: (u16, u16, u16, u16)) -> Result<(), String> {
+        let payload = [
+                ("r", ciborium::value::Value::Integer(target.0.try_into().unwrap())),
+                ("g", ciborium::value::Value::Integer(target.1.try_into().unwrap())),
+                ("b", ciborium::value::Value::Integer(target.2.try_into().unwrap())),
+                ("w", ciborium::value::Value::Integer(target.3.try_into().unwrap())),
+        ];
+        let payload = CborMap::from_slice(&payload);
 
-             ciborium::ser::into_writer(&payload, msg_wrt).unwrap();
-             Ok(())
-        }).await
+        basic::set_actuator(rsrc, payload).await
     }
 
     pub async fn process(&self) {

@@ -19,8 +19,7 @@ impl Twilight {
             status: String,
         }
 
-        async fn sun_time_get<Tz: TimeZone>(day: Date<Tz>) -> Result<SunData, reqwest::Error> 
-        where Tz::Offset: core::fmt::Display
+        async fn sun_time_get(day: NaiveDate) -> Result<SunData, reqwest::Error> 
         {
             let result = reqwest::get(format!("https://api.sunrise-sunset.org/json?lat=50.061389&lng=19.938333&date={}",
                                               &day.format("%Y-%m-%d").to_string()
@@ -29,8 +28,8 @@ impl Twilight {
             Ok(result)
         }
 
-        let today = Utc::today();
-        let tomorrow = today.succ();
+        let today = Utc::now().date_naive();
+        let tomorrow = today.succ_opt().unwrap();
 
         let sun_data_today = sun_time_get(today).await.map_err(|e| e.to_string())?;
         let sun_data_tomorrow = sun_time_get(tomorrow).await.map_err(|e| e.to_string())?;
@@ -53,16 +52,17 @@ impl Twilight {
             let twilight_beg_tomorrow_time = NaiveTime::parse_from_str(twilight_begin_tomorrow_str, "%r").map_err(|e| e.to_string())?;
             let twilight_end_tomorrow_time = NaiveTime::parse_from_str(twilight_end_tomorrow_str, "%r").map_err(|e| e.to_string())?;
 
-            let now = Utc::now();
-            let twilight_begin_today = today.and_time(twilight_beg_today_time).unwrap();
-            let twilight_end_today = today.and_time(twilight_end_today_time).unwrap();
-            let twilight_begin_tomorrow = tomorrow.and_time(twilight_beg_tomorrow_time).unwrap();
-            let twilight_end_tomorrow = tomorrow.and_time(twilight_end_tomorrow_time).unwrap();
+            let now = Utc::now().naive_utc();
+            let twilight_begin_today = today.and_time(twilight_beg_today_time);
+            let twilight_end_today = today.and_time(twilight_end_today_time);
+            let twilight_begin_tomorrow = tomorrow.and_time(twilight_beg_tomorrow_time);
+            let twilight_end_tomorrow = tomorrow.and_time(twilight_end_tomorrow_time);
 
             let twilight_begin = if now > twilight_begin_today { twilight_begin_tomorrow } else { twilight_begin_today };
             let twilight_end = if now > twilight_end_today { twilight_end_tomorrow } else {twilight_end_today };
 
-            Ok([twilight_begin.try_into().unwrap(), twilight_end.try_into().unwrap()])
+            Ok([twilight_begin.and_utc().try_into().unwrap(),
+                twilight_end.and_utc().try_into().unwrap()])
         } else {
             Err("Missing twilight time in retrieved sun data".to_string())
         }

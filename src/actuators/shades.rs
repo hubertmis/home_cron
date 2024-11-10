@@ -1,26 +1,22 @@
-use async_coap::datagram::{DatagramLocalEndpoint, AllowStdUdpSocket};
 use chrono::prelude::*;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::actuators::cron_processor::{Action, CronProcessor};
-use crate::coap;
+use crate::coap::{basic, CborMap};
 use crate::state::{HcState, HvacState};
 use crate::web;
 
 pub struct Shades {
-    local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>,
     hvac_state: Arc<HvacState>,
     weather: Arc<web::Weather>,
 }
 
 impl Shades {
-    pub fn new(local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>,
-               hvac_state: Arc<HvacState>,
+    pub fn new(hvac_state: Arc<HvacState>,
                weather: Arc<web::Weather>,
               ) -> Self {
         Self {
-            local_endpoint,
             hvac_state,
             weather,
         }
@@ -29,8 +25,8 @@ impl Shades {
     async fn get_twilight_pair() -> [SystemTime; 2]
     {
         // TODO: Align it to the time of the year
-        let morning_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(6, 30, 0));
-        let evening_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms(19, 0, 0));
+        let morning_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms_opt(6, 30, 0).unwrap());
+        let evening_datetime = CronProcessor::time_to_timestamp(NaiveTime::from_hms_opt(19, 0, 0).unwrap());
 
         web::Twilight::new().get_pair().await.or::<Result<[SystemTime; 2], String>>(
             Ok([morning_datetime.try_into().unwrap(),
@@ -58,9 +54,6 @@ impl Shades {
                 evening_action_list.push(("dr3", 256));
                 evening_action_list.push(("k", 256));
 
-                let morning_endpoint = self.local_endpoint.clone();
-                let evening_endpoint = self.local_endpoint.clone();
-
                 let twilight_pair =  Shades::get_twilight_pair().await;
                 let morning_time = twilight_pair[0];
                 let evening_time = twilight_pair[1];
@@ -68,15 +61,13 @@ impl Shades {
                 actions.push(Action::new(
                     morning_time,
                     async move {
-                        let endpoint = &morning_endpoint.clone();
-                        CronProcessor::run_action(&morning_action_list, |r, v| async move {Self::move_shades(endpoint, r, v).await}, None).await
+                        CronProcessor::run_action(&morning_action_list, |r, v| async move {Self::move_shades(r, v).await}, None).await
                     }
                 ));
                 actions.push(Action::new(
                     evening_time,
                     async move {
-                        let endpoint = &evening_endpoint.clone();
-                        CronProcessor::run_action(&evening_action_list, |r, v| async move {Self::move_shades(endpoint, r, v).await}, None).await
+                        CronProcessor::run_action(&evening_action_list, |r, v| async move {Self::move_shades(r, v).await}, None).await
                     }
                 ));
                 println!("Heating");
@@ -94,9 +85,6 @@ impl Shades {
                 noon_action_list.push(("dr2", 0));
                 noon_action_list.push(("dr3", 0));
 
-                let morning_endpoint = self.local_endpoint.clone();
-                let noon_endpoint = self.local_endpoint.clone();
-
                 let morning_weather = self.weather.clone();
                 let morning_time = Shades::get_twilight_pair().await[0];
 
@@ -112,17 +100,15 @@ impl Shades {
                             }
                         }
 
-                        let endpoint = &morning_endpoint.clone();
                         CronProcessor::run_action(&morning_action_list, |r, v| async move {
-                            Self::move_shades(endpoint, r, v).await
+                            Self::move_shades(r, v).await
                         }, None).await
                     }
                 ));
                 actions.push(Action::new(
-                    CronProcessor::time_to_timestamp(NaiveTime::from_hms(12, 0, 0)),
+                    CronProcessor::time_to_timestamp(NaiveTime::from_hms_opt(12, 0, 0).unwrap()),
                     async move {
-                        let endpoint = &noon_endpoint.clone();
-                        CronProcessor::run_action(&noon_action_list, |r, v| async move {Self::move_shades(endpoint, r, v).await}, None).await
+                        CronProcessor::run_action(&noon_action_list, |r, v| async move {Self::move_shades(r, v).await}, None).await
                     }
                 ));
                 println!("Cooling");
@@ -132,11 +118,15 @@ impl Shades {
         actions
     }
 
-    async fn move_shades(endpoint: &Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, rsrc: &str, target: u16) -> Result<(), String> {
+    async fn move_shades(rsrc: &str, target: u16) -> Result<(), String> {
         println!("{} {}", rsrc, target);
 
-        let addr = coap::ServiceDiscovery::new(endpoint.clone()).service_discovery(rsrc, None).await?;
-        coap::Basic::new(endpoint.clone()).send_setter(&addr, rsrc, "val", target).await
+        let payload = [
+                ("val", ciborium::value::Value::Integer(target.try_into().unwrap())),
+        ];
+        let payload = CborMap::from_slice(&payload);
+
+        basic::set_actuator(rsrc, payload).await
     }
 
     pub async fn process(&self) {

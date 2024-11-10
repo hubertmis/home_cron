@@ -14,7 +14,7 @@ impl Moon {
     }
 
     pub async fn get_phase(&self) -> Result<Decimal, String> {
-        let tomorrow = Utc::today().succ();
+        let tomorrow = Utc::now().date_naive().succ_opt().unwrap();
         let url = format!("https://devapi.qweather.com/v7/astronomy/moon?location=27523&date={}&key={}&lang=en",
                           tomorrow.format("%Y%m%d"),
                           &self.qweather_key

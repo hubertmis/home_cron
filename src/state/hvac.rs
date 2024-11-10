@@ -1,7 +1,5 @@
-use async_coap::datagram::{DatagramLocalEndpoint, AllowStdUdpSocket};
 use chrono::prelude::*;
 use rust_decimal::prelude::*;
-use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 
 use crate::coap;
@@ -104,23 +102,24 @@ impl HvacState {
         }
     }
 
-    pub async fn process(&self, local_endpoint: Arc<DatagramLocalEndpoint<AllowStdUdpSocket>>, token: &str) -> Result<(), String> {
+    pub async fn process(&self, openweather_token: Option<String>, visualcrossing_token: Option<String>) -> Result<(), String> {
         println!("Starting processing hvac state");
-        let weather = web::Weather::new(token);
+        let weather = web::Weather::new(openweather_token, visualcrossing_token);
 
-        for n in 0..72 {
-            let hours = 72 - n;
-            println!("Getting temperature for {} hours ago", hours);
-            let temp = weather.get_temperature_history(Utc::now() - chrono::Duration::hours(hours)).await;
+        let now = Utc::now();
+        let start_time = now - chrono::Duration::hours(72);
+        println!("Getting temperature for range 72 hours ago until now");
+        let temps = weather.get_temperature_history(start_time, now).await.unwrap();
+        for temp in &temps {
             println!("Temp: {:?}", temp);
-            self.ext_temp_history.lock().await.push(temp.unwrap());
         }
+        self.ext_temp_history.lock().await.extend_from_slice(&temps);
 	
         let mut last_measurement_time = Utc::now() - chrono::Duration::hours(1);
 
         loop {
             // TODO: Some retries, trying other sources?
-            let curr_val = coap::Weather::new(local_endpoint.clone()).get_temperature().await;
+            let curr_val = coap::Weather::new().get_temperature().await;
             if let Ok(curr_val) = curr_val {
                 async {
                     let mut temp_history = self.ext_temp_history.lock().await;
