@@ -1041,7 +1041,7 @@ dependencies = [
 [[package]]
 name = "home_mng"
 version = "0.1.0"
-source = "git+https://github.com/hubertmis/home_mng.git?rev=22e9973#22e997360eeb0087b146ba8aef32d2034cdf2ec8"
+source = "git+https://github.com/hubertmis/home_mng.git?rev=6a0682a#6a0682a1569549de43521fad9aafd9f2eb7b1ff6"
 dependencies = [
  "ciborium",
  "clap 4.5.20",

@@ -7,7 +7,7 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-home_mng = { git = "https://github.com/hubertmis/home_mng.git", rev = "22e9973" }
+home_mng = { git = "https://github.com/hubertmis/home_mng.git", rev = "6a0682a" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 ciborium = "0.2"

@@ -13,11 +13,9 @@ impl <'a> ServiceDiscovery<'a> {
     }
 
     pub async fn discover_single(&self, rsrc: &str) -> Result<SocketAddr, String> {
-        let addr = self.coap.service_discovery(Some(rsrc), None).await.map_err(|e| e.to_string())?;
-        if addr.len() != 1 {
-            return Err(format!("Unexpected number of discovered services: {} {}", addr.len(), rsrc));
-        }
-
-        Ok(addr[0].2)
+        Ok(self.coap.service_discovery_single(rsrc, None).await
+            .map_err(|e| e.to_string())?
+            .ok_or(format!("Could not discover address of {}", rsrc))?
+            .0)
     }
 }

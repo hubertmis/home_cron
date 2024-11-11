@@ -115,6 +115,16 @@ impl Shades {
             },
         }
 
+        // Test action
+        /*
+        actions.push(Action::new(
+                (Utc::now() + std::time::Duration::new(10, 0)).into(),
+                async move {
+                    CronProcessor::run_action(&[("lr", 0), ("dr1", 0)], |r, v| async move {Self::move_shades(r, v).await}, None).await
+                }
+                ));
+        */
+
         actions
     }
 
