@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o xtrace
+
+if [ "$#" -ne 3 ]; then
+  echo "Usage: $0 <user@host> <target_install_path> <target_systemctl_service_name>"
+  exit 1
+fi
+
+readonly TARGET_HOST=$1
+readonly TARGET_PATH=$2
+readonly TARGET_TMP_PATH=/tmp/home_cron
+readonly TARGET_ARCH=armv7-unknown-linux-gnueabihf
+readonly SOURCE_PATH=./target/${TARGET_ARCH}/release/home_cron
+readonly TARGET_SYSTEMCTL_SERVICE=$3
+
+cargo build --release --target=${TARGET_ARCH}
+rsync ${SOURCE_PATH} ${TARGET_HOST}:${TARGET_TMP_PATH}
+ssh -t ${TARGET_HOST} << EOF
+  sudo systemctl stop ${TARGET_SYSTEMCTL_SERVICE}
+  sudo scp ${TARGET_TMP_PATH} ${TARGET_PATH}
+  sudo systemctl start ${TARGET_SYSTEMCTL_SERVICE}
+EOF

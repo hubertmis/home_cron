@@ -481,8 +481,9 @@ checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
 
 [[package]]
 name = "coap"
-version = "0.18.0"
-source = "git+https://github.com/hubertmis/coap-rs.git?branch=dev/home_mng#aeca2aa3d4ec68d9534225d206b832bc9a9abef9"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e91c0f1468cd10f768d878ea5b2d0461c41c47455a1b94c5d521deb1b72539a9"
 dependencies = [
  "async-trait",
  "coap-lite",
@@ -1027,6 +1028,7 @@ dependencies = [
  "futures",
  "home_mng",
  "log",
+ "openssl",
  "rand",
  "reqwest",
  "rust_decimal",
@@ -1041,7 +1043,7 @@ dependencies = [
 [[package]]
 name = "home_mng"
 version = "0.1.0"
-source = "git+https://github.com/hubertmis/home_mng.git?rev=6a0682a#6a0682a1569549de43521fad9aafd9f2eb7b1ff6"
+source = "git+https://github.com/hubertmis/home_mng.git?rev=77d586b#77d586be8477e2f661d2f2b3eb04827d7700cb74"
 dependencies = [
  "ciborium",
  "clap 4.5.20",
@@ -1446,6 +1448,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28988d872ab76095a6e6ac88d99b54fd267702734fd7ffe610ca27f533ddb95a"
 
 [[package]]
+name = "openssl-src"
+version = "111.28.2+1.1.1w"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bb1830e20a48a975ca898ca8c1d036a36c3c6c5cb7dabc1c216706587857920f"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "openssl-sys"
 version = "0.9.72"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1454,6 +1465,7 @@ dependencies = [
  "autocfg",
  "cc",
  "libc",
+ "openssl-src",
  "pkg-config",
  "vcpkg",
 ]
