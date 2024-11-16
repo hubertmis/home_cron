@@ -99,6 +99,8 @@ impl CronProcessor {
         let today_time_with_tz = today_time.and_local_timezone(Local).earliest().unwrap(); // TODO: handle gap
 
         let target_time = if now > today_time_with_tz { tomorrow_time } else { today_time };
-        target_time.and_utc().try_into().unwrap()
+        target_time.and_local_timezone(Local)
+            .earliest().unwrap() // TODO: handle gap
+            .try_into().unwrap()
     }
 }
